@@ -10,7 +10,8 @@ use super::cache::{RasterCacheWriter, RasterLayout};
 use super::{cache::RasterCacheKey, decode::bounded_dimensions, LargeImageError};
 use crate::{DecodeCancellation, DecodedImage};
 
-const MAX_MAPPED_DECODE_BYTES: u64 = 32 * 1024 * 1024 * 1024;
+// Bound temporary disk-backed decoded buffers on Windows laptops.
+const MAX_MAPPED_DECODE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 pub(super) fn decode_mapped_preview(
     path: &Path,
