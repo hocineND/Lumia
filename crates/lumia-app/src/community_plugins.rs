@@ -412,12 +412,19 @@ async fn fetch_index(client: &Arc<dyn http_client::HttpClient>) -> anyhow::Resul
     }
     let (_parts, mut body) = response.into_parts();
     let mut bytes = Vec::new();
-    futures::io::AsyncReadExt::read_to_end(&mut body, &mut bytes).await?;
-    if bytes.len() > MAX_COMMUNITY_INDEX_BYTES {
-        anyhow::bail!(
-            "community plugin index exceeds {} MiB",
-            MAX_COMMUNITY_INDEX_BYTES / 1024 / 1024
-        );
+    let mut chunk = [0u8; 8192];
+    loop {
+        let read = futures::io::AsyncReadExt::read(&mut body, &mut chunk).await?;
+        if read == 0 {
+            break;
+        }
+        if bytes.len().saturating_add(read) > MAX_COMMUNITY_INDEX_BYTES {
+            anyhow::bail!(
+                "community plugin index exceeds {} MiB",
+                MAX_COMMUNITY_INDEX_BYTES / 1024 / 1024
+            );
+        }
+        bytes.extend_from_slice(&chunk[..read]);
     }
     parse_index(&bytes)
 }
