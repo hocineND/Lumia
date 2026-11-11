@@ -50,6 +50,18 @@ pub fn load_decoded_image_from_path_with_policy(
         .ok_or_else(|| ImageLoadError::MissingExtension(path.to_path_buf()))?;
 
     if extension.eq_ignore_ascii_case("heic") || extension.eq_ignore_ascii_case("heif") {
+        // Avoid reading an arbitrarily large HEIC/HEIF file into memory.
+        const MAX_HEIF_INPUT_BYTES: u64 = 128 * 1024 * 1024;
+        let input_size = std::fs::metadata(path).map_err(|source| ImageLoadError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?.len();
+        if input_size > MAX_HEIF_INPUT_BYTES {
+            return Err(ImageLoadError::MemoryLimit {
+                bytes: input_size,
+                limit: MAX_HEIF_INPUT_BYTES,
+            });
+        }
         let file_bytes = std::fs::read(path).map_err(|source| ImageLoadError::Io {
             path: path.to_path_buf(),
             source,
