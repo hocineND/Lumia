@@ -1,0 +1,35 @@
+name: Windows preview build
+
+on:
+  push:
+    branches:
+      - fix/opt-in-windows-file-associations
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Compile Windows viewer
+        run: cargo build --release --locked -p lumia-app
+      - name: Run unit tests
+        run: cargo test --locked -p lumia-app
+      - name: Package Windows executable
+        shell: pwsh
+        run: |
+          $destination = "target/windows-preview"
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          Copy-Item "target/release/lumia-app.exe" "$destination/lumia-app.exe"
+          Compress-Archive -Path "$destination/*" -DestinationPath "target/Lumia-windows-preview.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lumia-windows-preview
+          path: target/Lumia-windows-preview.zip
+          if-no-files-found: error
