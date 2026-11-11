@@ -228,7 +228,10 @@ async fn fetch_text(client: &Arc<dyn HttpClient>, url: &str) -> anyhow::Result<S
             break;
         }
         if bytes.len().saturating_add(read) > MAX_UPDATE_METADATA_BYTES {
-            anyhow::bail!("update metadata exceeds {} bytes", MAX_UPDATE_METADATA_BYTES);
+            anyhow::bail!(
+                "update metadata exceeds {} bytes",
+                MAX_UPDATE_METADATA_BYTES
+            );
         }
         bytes.extend_from_slice(&chunk[..read]);
     }
@@ -366,9 +369,8 @@ impl LumiaApp {
         };
 
         if asset.size > MAX_INSTALLER_BYTES {
-            self.ui.update_check.state = UpdateState::Error(
-                "installer exceeds maximum allowed download size".to_string(),
-            );
+            self.ui.update_check.state =
+                UpdateState::Error("installer exceeds maximum allowed download size".to_string());
             cx.notify();
             return;
         }
