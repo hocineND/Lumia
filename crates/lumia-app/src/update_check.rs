@@ -10,15 +10,17 @@ use crate::app::LumiaApp;
 use crate::persistence::save_settings;
 use lumia_core::Language;
 
-const RELEASES_LATEST_URL: &str = "https://api.github.com/repos/iFence/lumia/releases/latest";
+const RELEASES_LATEST_URL: &str = "https://api.github.com/repos/hocineND/Lumia/releases/latest";
 const DEFAULT_BRANCH: &str = "master";
+const MAX_UPDATE_METADATA_BYTES: usize = 2 * 1024 * 1024;
+const MAX_INSTALLER_BYTES: u64 = 512 * 1024 * 1024;
 
 fn changelog_url(language: Language) -> String {
     let filename = match language {
         Language::English => "Changelog.md",
         Language::Chinese => "Changelog-zh-CN.md",
     };
-    format!("https://raw.githubusercontent.com/iFence/lumia/{DEFAULT_BRANCH}/{filename}")
+    format!("https://raw.githubusercontent.com/hocineND/Lumia/{DEFAULT_BRANCH}/{filename}")
 }
 
 #[derive(Debug, Clone)]
@@ -219,7 +221,17 @@ async fn fetch_text(client: &Arc<dyn HttpClient>, url: &str) -> anyhow::Result<S
     }
     let (_parts, mut body) = response.into_parts();
     let mut bytes = Vec::new();
-    futures::io::AsyncReadExt::read_to_end(&mut body, &mut bytes).await?;
+    let mut chunk = [0u8; 8192];
+    loop {
+        let read = futures::io::AsyncReadExt::read(&mut body, &mut chunk).await?;
+        if read == 0 {
+            break;
+        }
+        if bytes.len().saturating_add(read) > MAX_UPDATE_METADATA_BYTES {
+            anyhow::bail!("update metadata exceeds {} bytes", MAX_UPDATE_METADATA_BYTES);
+        }
+        bytes.extend_from_slice(&chunk[..read]);
+    }
     Ok(String::from_utf8(bytes)?)
 }
 
@@ -353,6 +365,13 @@ impl LumiaApp {
             _ => return,
         };
 
+        if asset.size > MAX_INSTALLER_BYTES {
+            self.ui.update_check.state = UpdateState::Error(
+                "installer exceeds maximum allowed download size".to_string(),
+            );
+            cx.notify();
+            return;
+        }
         let total_bytes = (asset.size > 0).then_some(asset.size);
         self.ui.update_check.state = UpdateState::Downloading {
             latest_version: latest_version.clone(),
@@ -383,6 +402,9 @@ impl LumiaApp {
                     }
                     std::io::Write::write_all(&mut file, &buf[..n])?;
                     downloaded += n as u64;
+                    if downloaded > MAX_INSTALLER_BYTES {
+                        anyhow::bail!("installer download exceeds maximum allowed size");
+                    }
                     if last_notify.elapsed() >= Duration::from_millis(100) {
                         last_notify = Instant::now();
                         let _ = handle.update(cx, |this, cx| {
@@ -412,10 +434,19 @@ impl LumiaApp {
                         this.ui.update_check.state = UpdateState::Installing;
                         cx.notify();
                     });
-                    let _ = crate::shell::open_url_in_browser(&dest.to_string_lossy());
-                    let _ = handle.update(cx, |_, cx| {
-                        cx.quit();
-                    });
+                    match crate::shell::open_url_in_browser(&dest.to_string_lossy()) {
+                        Ok(()) => {
+                            let _ = handle.update(cx, |_, cx| cx.quit());
+                        }
+                        Err(err) => {
+                            let _ = handle.update(cx, |this, cx| {
+                                this.ui.update_check.state = UpdateState::Error(format!(
+                                    "failed to launch update installer: {err:#}"
+                                ));
+                                cx.notify();
+                            });
+                        }
+                    }
                 }
                 Err(err) => {
                     let _ = handle.update(cx, |this, cx| {
