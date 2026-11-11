@@ -181,26 +181,8 @@ fn main() -> anyhow::Result<()> {
         cli::CliCommand::OpenFile(path) => bootstrap::run_gui(Some(path)),
         cli::CliCommand::Normal => {
             #[cfg(target_os = "windows")]
-            ensure_file_associations_on_first_launch();
-            #[cfg(target_os = "windows")]
             ensure_svg_thumbnail_handler();
             bootstrap::run_gui(None)
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn ensure_file_associations_on_first_launch() {
-    match shell::query_file_associations() {
-        Ok(snapshot) if snapshot.configured => {}
-        _ => {
-            let extensions = lumia_core::supported_image_extensions()
-                .iter()
-                .map(|ext| (*ext).to_string())
-                .collect::<std::collections::BTreeSet<_>>();
-            if let Err(err) = shell::apply_file_associations(&extensions) {
-                log_windows_error("first_launch_file_associations", &err);
-            }
         }
     }
 }
