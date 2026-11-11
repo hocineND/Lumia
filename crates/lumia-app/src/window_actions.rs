@@ -22,7 +22,7 @@ impl LumiaApp {
 
     pub(crate) fn toggle_window_fullscreen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         window.toggle_fullscreen();
-        self.ui.is_fullscreen = !self.ui.is_fullscreen;
+        self.ui.is_fullscreen = window.is_fullscreen();
         cx.notify();
     }
 

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/opt-in-windows-file-associations
+      - fix/windows-hardening
   workflow_dispatch:
 
 permissions:
